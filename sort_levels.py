@@ -16,8 +16,8 @@ for input_file in input_files:
     tree = ET.parse(input_file)
     root = tree.getroot()
 
-    for index, lvl in enumerate(root.findall("level")):
-        # Reset number starting from 0
+    for index, lvl in enumerate(root.findall("level"), start=1):  # start index from 1
+        # Reset number starting from 1
         lvl.set("number", str(index))
 
         # Remove any attribute not in the allowed list
