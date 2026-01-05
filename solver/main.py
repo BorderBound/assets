@@ -1,4 +1,4 @@
-# main.py
+# main_add_solutions.py
 import sys
 from simple_xml import SimpleXml
 from board import Board
@@ -17,6 +17,8 @@ def parse_move(move: str):
 def replay_solution(board: Board, solution_str: str):
     b = board.copy()
     for move in solution_str.split(","):
+        if not move:
+            continue
         r, c = parse_move(move)
         changed = b.click(r, c)
         if not changed:
@@ -36,6 +38,18 @@ def try_existing_solution(board: Board, solution_str: str):
     except Exception:
         pass
     return None
+
+
+def generate_levels(levels):
+    xml_lines = ['<levels>']
+    for number, lvl in enumerate(levels):
+        color = lvl["color"]
+        modifier = lvl["modifier"]
+        solution = lvl.get("solution", "")
+        solution_attr = f' solution="{solution}"' if solution else ""
+        xml_lines.append(f'  <level number="{number}" color="{color}" modifier="{modifier}"{solution_attr} />')
+    xml_lines.append('</levels>')
+    return "\n".join(xml_lines)
 
 
 # ------------------------------
@@ -69,16 +83,21 @@ def main():
         print(f"Error parsing XML: {e}")
         return
 
+    updated_levels = []
+
     for level_number, attrs in enumerate(levels):
+        # Skip levels if starting at a specific level
         if level_to_start is not None:
             if continue_after:
                 if level_number < level_to_start:
+                    updated_levels.append(attrs)
                     continue
             else:
                 if level_number != level_to_start:
+                    updated_levels.append(attrs)
                     continue
 
-        print(f"\nFinding Level {level_number} Solution...")
+        print(f"\nSolving Level {level_number}...")
 
         board = Board.from_strings(attrs["color"], attrs["modifier"])
 
@@ -98,44 +117,64 @@ def main():
                 print("# Existing solution INVALID")
 
         # ------------------------------
-        # Run solvers
+        # Run solver
         # ------------------------------
         new_board = solve_with_all_strategies_parallel(board)
 
         # ------------------------------
-        # Choose best
+        # Choose best solution
         # ------------------------------
         chosen_board = None
+        solution_str = None
 
         if new_board and existing_board:
             if new_board.move_sequence.n < existing_moves:
                 print("# New solution is better")
                 chosen_board = new_board
+                solution_str = str(new_board.move_sequence)
             else:
                 print("# Keeping existing solution")
                 chosen_board = existing_board
-
+                solution_str = existing_solution
         elif new_board:
             print("# Using new solution")
             chosen_board = new_board
-
+            solution_str = str(new_board.move_sequence)
         elif existing_board:
             print("# Solver failed, keeping existing solution")
             chosen_board = existing_board
-
+            solution_str = existing_solution
         else:
             print("# No solution found")
+            chosen_board = None
+            solution_str = ""
 
         # ------------------------------
-        # Output
+        # Save solution to level attributes
+        # ------------------------------
+        attrs["solution"] = solution_str
+        updated_levels.append(attrs)
+
+        # ------------------------------
+        # Write updated XML after each level
+        # ------------------------------
+        new_xml = generate_levels(updated_levels)
+        out_file = xml_file.replace(".xml", "_solved.xml")
+        with open(out_file, "w", encoding="utf-8") as f:
+            f.write(new_xml)
+        print(f"# Updated XML saved to {out_file}")
+
+        # ------------------------------
+        # Display
         # ------------------------------
         if chosen_board:
-            print(f"Solution: {chosen_board.move_sequence}")
+            print(f"Solution moves: {solution_str}")
             print("Completed board:")
             chosen_board.display()
 
-        print()
         input("# Press Enter to continue after solution...")
+
+    print("\nAll selected levels processed. Final XML saved.")
 
 
 if __name__ == "__main__":
