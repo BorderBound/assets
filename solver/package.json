@@ -5,10 +5,10 @@
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
-    "easy": "node main.js ../levelsEasy.xml",
-    "medium": "node main.js ../levelsMedium.xml",
-    "hard": "node main.js ../levelsHard.xml",
-    "community": "node main.js ../levelsCommunity.xml",
+    "easy": "node --max-old-space-size=8192 main.js ../levelsEasy.xml",
+    "medium": "node --max-old-space-size=8192 main.js ../levelsMedium.xml",
+    "hard": "node --max-old-space-size=8192 main.js ../levelsHard.xml",
+    "community": "node --max-old-space-size=8192 main.js ../levelsCommunity.xml",
     "all": "npm run easy & npm run medium & npm run hard & npm run community"
   },
   "keywords": [
@@ -18,6 +18,7 @@
   ],
   "author": "Wayne",
   "license": "GPL-3.0-only",
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "fastpriorityqueue": "^0.7.5"
+  }
 }

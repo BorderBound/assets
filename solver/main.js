@@ -52,7 +52,8 @@ function generateLevels(levels) {
 }
 
 // ------------------------------
-// Main
+// Main function
+// ------------------------------
 async function main() {
   const args = process.argv.slice(2);
   if (args.length < 1) {
@@ -114,21 +115,23 @@ async function main() {
     else if (existingSolution) console.log("# Existing solution INVALID");
 
     // ------------------------------
-    // Run solver
+    // Run parallel solver (DFS, BFS, A*, IDA*)
     // ------------------------------
-    const newBoard = await solveWithAllStrategiesParallel(board);
+    const newBoard = await solveWithAllStrategiesParallel(board, false); // debug=false
 
     // ------------------------------
     // Choose best solution
     // ------------------------------
     let chosenBoard = null;
     let solutionStr = "";
+    let updatedXml = false; // save XML only if a new/better solution exists
 
     if (newBoard && existingBoard) {
       if (newBoard.moveSequence.n < existingMoves) {
         console.log("# New solution is better");
         chosenBoard = newBoard;
-        solutionStr = newBoard.moveSequence.toString();
+        solutionStr = newBoard.moveSequence.moves.join(","); // array → string
+        updatedXml = true;
       } else {
         console.log("# Keeping existing solution");
         chosenBoard = existingBoard;
@@ -137,7 +140,8 @@ async function main() {
     } else if (newBoard) {
       console.log("# Using new solution");
       chosenBoard = newBoard;
-      solutionStr = newBoard.moveSequence.toString();
+      solutionStr = newBoard.moveSequence.moves.join(",");
+      updatedXml = true;
     } else if (existingBoard) {
       console.log("# Solver failed, keeping existing solution");
       chosenBoard = existingBoard;
@@ -148,19 +152,21 @@ async function main() {
       solutionStr = "";
     }
 
-    attrs.solution = solutionStr || ""; // ✅ Ensure string
+    attrs.solution = solutionStr || ""; // ensure string
     updatedLevels.push(attrs);
 
     // ------------------------------
-    // Write updated XML
+    // Write updated XML ONLY if a new/better solution exists
     // ------------------------------
-    const newXml = generateLevels(updatedLevels);
-    const outFile = xmlFile.replace(".xml", "_solved.xml");
-    fs.writeFileSync(outFile, newXml, "utf-8");
-    console.log(`# Updated XML saved to ${outFile}`);
+    if (updatedXml) {
+      const newXml = generateLevels(updatedLevels);
+      const outFile = xmlFile.replace(".xml", "_solved.xml");
+      fs.writeFileSync(outFile, newXml, "utf-8");
+      console.log(`# Updated XML saved to ${outFile}`);
+    }
 
     // ------------------------------
-    // Display board
+    // Display board and moves
     // ------------------------------
     if (chosenBoard) {
       console.log(`Solution moves: ${solutionStr}`);
@@ -168,7 +174,9 @@ async function main() {
       chosenBoard.display();
     }
 
-    // Wait for user
+    // ------------------------------
+    // Wait for user input
+    // ------------------------------
     await new Promise(resolve => {
       process.stdout.write("# Press Enter to continue after solution...");
       process.stdin.once("data", () => resolve());
@@ -179,4 +187,7 @@ async function main() {
   process.exit(0);
 }
 
+// ------------------------------
+// Run main
+// ------------------------------
 main().catch(console.error);
