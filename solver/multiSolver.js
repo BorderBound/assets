@@ -533,7 +533,7 @@ async function solveWithAllStrategiesParallel(board, debug = false) {
 	await Promise.all(solvers.map(runWorker));
 
 	const fullySolved = results.filter((b) => b.isSolved());
-	return fullySolved.length ? fullySolved.slice(0, 4) : null; // <-- return up to 3
+	return fullySolved.length ? fullySolved.slice(0, 4) : null; // <-- return up to 4
 }
 
 // ------------------------------
