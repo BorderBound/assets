@@ -1,0 +1,23 @@
+{
+  "name": "borderbound-solver",
+  "version": "1.0.0",
+  "description": "Node.js port of BorderBound solvers",
+  "main": "main.js",
+  "type": "commonjs",
+  "scripts": {
+    "easy": "node main.js ../levelsEasy.xml",
+    "medium": "node main.js ../levelsMedium.xml",
+    "hard": "node main.js ../levelsHard.xml",
+    "community": "node main.js ../levelsCommunity.xml",
+    "all": "npm run easy & npm run medium & npm run hard & npm run community"
+  },
+  "keywords": [
+    "puzzle",
+    "solver",
+    "borderbound"
+  ],
+  "author": "Wayne",
+  "license": "GPL-3.0-only",
+  "dependencies": {},
+  "devDependencies": {}
+}

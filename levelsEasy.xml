@@ -73,7 +73,7 @@
     <level color="rrrrr oorrr gggrr rrbrd rrbrd 00000"
            modifier="00000 R0000 R0000 00000 F0UFU XXXXX"
            number="14"
-           solution="A3,E5,A3,C5,D5,A2,C5,A3,D5,C5,D5,A5" />
+           solution="A3,E5,A3,C5,D5,A2,C5,A3,C5,A5,D5,D5" />
 
     <level color="rrbbb bbgoo ddgoo dordd dorrr dorgr"
            modifier="F000L R000F R0U00 0000L 00000 FUFU0"
