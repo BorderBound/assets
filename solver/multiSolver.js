@@ -119,6 +119,186 @@ function bfsSolver(initialBoard, debug = false, maxSteps = DEFAULT_MAX_STEPS, ma
 }
 
 // ------------------------------
+// Greedy Best-First Search Solver
+// ------------------------------
+function gbfsSolver(initialBoard, debug = false, maxSteps = DEFAULT_MAX_STEPS, maxQueueSize = DEFAULT_MAX_QUEUE_SIZE) {
+    const seen = new Set();
+    const pq = new FastPriorityQueue((a, b) => a.priority < b.priority);
+
+    // Combined heuristic: Manhattan distance + color mismatches
+    function heuristic(board) {
+        let manhattan = 0;
+        let colorMismatch = 0;
+        for (let r = 0; r < board.rows; r++) {
+            for (let c = 0; c < board.cols; c++) {
+                const f = board.fields[r][c];
+                if (!f.isCorrect()) {
+                    // Manhattan distance to target (for empty / correct position)
+                    const targetRow = f.correctRow ?? r;
+                    const targetCol = f.correctCol ?? c;
+                    manhattan += Math.abs(r - targetRow) + Math.abs(c - targetCol);
+                    colorMismatch += f.color !== f.correctColor ? 1 : 0;
+                }
+            }
+        }
+        return manhattan + colorMismatch;
+    }
+
+    pq.add({ board: initialBoard, priority: heuristic(initialBoard) });
+    seen.add(initialBoard.hash() + "|0");
+
+    while (!pq.isEmpty()) {
+        const { board } = pq.poll();
+        if (board.isSolved()) return board;
+        if (board.moveSequence.n >= maxSteps) continue;
+
+        for (let r = 0; r < board.rows; r++) {
+            for (let c = 0; c < board.cols; c++) {
+                const f = board.fields[r][c];
+                if (!f.isClickable()) continue;
+                if (f.onlyReachableFrom !== POSITION_NONE && (r !== f.onlyReachableFrom.row || c !== f.onlyReachableFrom.col)) continue;
+
+                const newBoard = board.copy();
+                if (!newBoard.click(r, c)) continue;
+
+                const hash = newBoard.hash() + "|" + newBoard.moveSequence.n;
+                if (seen.has(hash)) continue;
+                seen.add(hash);
+
+                pq.add({ board: newBoard, priority: heuristic(newBoard) });
+                if (pq.size > maxQueueSize) pq.poll();
+
+                if (debug) console.log(`GBFS enqueue move ${String.fromCharCode(65 + c)}${r + 1}`);
+            }
+        }
+    }
+
+    return null;
+}
+
+// ------------------------------
+// Monte Carlo Tree Search Solver
+// ------------------------------
+function mctsSolver(
+	initialBoard,
+	debug = false,
+	maxSteps = DEFAULT_MAX_STEPS,
+	timeoutMs = DEFAULT_TIMEOUT_MS
+) {
+	const startTime = Date.now();
+	const EXPLORATION = Math.sqrt(2);
+
+	class Node {
+		constructor(board, parent = null, move = null) {
+			this.board = board;
+			this.parent = parent;
+			this.move = move;
+			this.children = [];
+			this.visits = 0;
+			this.reward = 0;
+			this.untriedMoves = getMoves(board);
+		}
+	}
+
+	function getMoves(board) {
+		const moves = [];
+		for (let r = 0; r < board.rows; r++) {
+			for (let c = 0; c < board.cols; c++) {
+				const f = board.fields[r][c];
+				if (!f.isClickable()) continue;
+				if (
+					f.onlyReachableFrom !== POSITION_NONE &&
+					(r !== f.onlyReachableFrom.row || c !== f.onlyReachableFrom.col)
+				) continue;
+				moves.push({ r, c });
+			}
+		}
+		return moves;
+	}
+
+	function ucb1(child) {
+		return (
+			child.reward / (child.visits + 1e-6) +
+			EXPLORATION * Math.sqrt(Math.log(child.parent.visits + 1) / (child.visits + 1e-6))
+		);
+	}
+
+	function select(node) {
+		while (node.untriedMoves.length === 0 && node.children.length > 0) {
+			node = node.children.reduce((a, b) => (ucb1(a) > ucb1(b) ? a : b));
+		}
+		return node;
+	}
+
+	function expand(node) {
+		if (node.untriedMoves.length === 0) return node;
+		const move = node.untriedMoves.pop();
+		const newBoard = node.board.copy();
+		if (!newBoard.click(move.r, move.c)) return node;
+
+		const child = new Node(newBoard, node, move);
+		node.children.push(child);
+		return child;
+	}
+
+	function simulate(board) {
+		let depth = 0;
+		while (depth < maxSteps) {
+			if (board.isSolved()) return 1;
+
+			const moves = getMoves(board);
+			if (moves.length === 0) break;
+
+			const m = moves[Math.floor(Math.random() * moves.length)];
+			if (!board.click(m.r, m.c)) break;
+
+			depth++;
+		}
+
+		// Partial reward: fewer incorrect fields is better
+		const incorrect = board.fields.flat().filter(f => !f.isCorrect()).length;
+		return 1 / (1 + incorrect);
+	}
+
+	function backpropagate(node, reward) {
+		while (node) {
+			node.visits++;
+			node.reward += reward;
+			node = node.parent;
+		}
+	}
+
+	const root = new Node(initialBoard);
+	let bestSolved = null;
+
+	while (Date.now() - startTime < timeoutMs) {
+		let node = select(root);
+		node = expand(node);
+
+		const rolloutBoard = node.board.copy();
+		const reward = simulate(rolloutBoard);
+
+		if (rolloutBoard.isSolved()) {
+			bestSolved = rolloutBoard.copy();
+			break;
+		}
+
+		backpropagate(node, reward);
+	}
+
+	if (bestSolved) return bestSolved;
+
+	// fallback: best child seen
+	const bestChild = root.children.reduce(
+		(a, b) => (b.visits > a.visits ? b : a),
+		root.children[0]
+	);
+
+	return bestChild ? bestChild.board : null;
+}
+
+
+// ------------------------------
 // A* / Branch-and-bound Solver
 // ------------------------------
 function branchBoundSolver(initialBoard, debug = false, maxSteps = DEFAULT_MAX_STEPS, maxQueueSize = DEFAULT_MAX_QUEUE_SIZE) {
@@ -154,6 +334,70 @@ function branchBoundSolver(initialBoard, debug = false, maxSteps = DEFAULT_MAX_S
 				const priority = newMoves + heuristic(newBoard);
 				pq.add({ board: newBoard, moves: newMoves, priority });
 				if (pq.size > maxQueueSize) pq.poll();
+			}
+		}
+	}
+
+	return null;
+}
+
+// ------------------------------
+// Enhanced A* / Branch-and-bound Solver with Manhattan distance
+// ------------------------------
+function enhancedBranchBoundSolver(initialBoard, debug = false, maxSteps = DEFAULT_MAX_STEPS, maxQueueSize = DEFAULT_MAX_QUEUE_SIZE) {
+	const seen = new Set();
+	const pq = new FastPriorityQueue((a, b) => a.priority < b.priority);
+
+	// Enhanced heuristic: wrong tiles + bombs weighted + Manhattan distance
+	function heuristic(board) {
+		let score = 0;
+		for (let r = 0; r < board.rows; r++) {
+			for (let c = 0; c < board.cols; c++) {
+				const f = board.fields[r][c];
+				if (!f.isCorrect()) {
+					score += 1;             // wrong tile
+					if (f.isBomb) score += 2; // bomb penalty
+
+					// Manhattan distance from current position to target color cluster
+					if (f.targetPosition) {
+						const dr = Math.abs(r - f.targetPosition.row);
+						const dc = Math.abs(c - f.targetPosition.col);
+						score += dr + dc;
+					}
+				}
+			}
+		}
+		return score;
+	}
+
+	pq.add({ board: initialBoard, moves: 0, priority: heuristic(initialBoard) });
+	seen.add(initialBoard.hash() + "|0");
+
+	while (!pq.isEmpty()) {
+		const { board, moves } = pq.poll();
+		if (moves >= maxSteps) continue;
+		if (board.isSolved()) return board;
+
+		for (let r = 0; r < board.rows; r++) {
+			for (let c = 0; c < board.cols; c++) {
+				const f = board.fields[r][c];
+				if (!f.isClickable()) continue;
+				if (f.onlyReachableFrom !== POSITION_NONE &&
+					(r !== f.onlyReachableFrom.row || c !== f.onlyReachableFrom.col)) continue;
+
+				const newBoard = board.copy();
+				if (!newBoard.click(r, c)) continue;
+
+				const hash = newBoard.hash() + "|" + newBoard.moveSequence.n;
+				if (seen.has(hash)) continue;
+				seen.add(hash);
+
+				const newMoves = newBoard.moveSequence.n;
+				const priority = newMoves + heuristic(newBoard);
+				pq.add({ board: newBoard, moves: newMoves, priority });
+
+				if (pq.size > maxQueueSize) pq.poll();
+				if (debug) console.log(`Enhanced A* enqueue move ${String.fromCharCode(65+c)}${r+1}, priority=${priority}`);
 			}
 		}
 	}
@@ -228,7 +472,10 @@ if (!isMainThread) {
 	const solverMap = {
 		DFS: (b, d) => dfsSolver(b, d, DEFAULT_MAX_STEPS),
 		BFS: (b, d) => bfsSolver(b, d, DEFAULT_MAX_STEPS, DEFAULT_MAX_QUEUE_SIZE),
+		GBFS: (b, d) => gbfsSolver(b, d, DEFAULT_MAX_STEPS, DEFAULT_MAX_QUEUE_SIZE),
+		MCTS: (b, d) => mctsSolver(b, d, DEFAULT_MAX_STEPS, DEFAULT_TIMEOUT_MS),
 		"A*": (b, d) => branchBoundSolver(b, d, DEFAULT_MAX_STEPS, DEFAULT_MAX_QUEUE_SIZE),
+		"EA*": (b, d) => enhancedBranchBoundSolver(b, d, DEFAULT_MAX_STEPS, DEFAULT_MAX_QUEUE_SIZE),
 		IDA: (b, d) => idaStarSolver(b, d, DEFAULT_MAX_STEPS, DEFAULT_TIMEOUT_MS),
 	};
 
@@ -249,10 +496,10 @@ if (!isMainThread) {
 }
 
 // ------------------------------
-// Parallel solver
+// Parallel solver (collect up to 4 solutions)
 // ------------------------------
 async function solveWithAllStrategiesParallel(board, debug = false) {
-	const solvers = ["DFS", "BFS", "A*", "IDA"];
+	const solvers = ["DFS", "BFS","GBFS", "MCTS", "A*", "EA*", "IDA"];
 	const results = [];
 	const workers = [];
 
@@ -269,7 +516,7 @@ async function solveWithAllStrategiesParallel(board, debug = false) {
 					const solvedBoard = boardFromData(msg.result);
 					results.push(solvedBoard);
 					console.log(`# ${msg.solverName} finished with ${solvedBoard.moveSequence.n} moves`);
-					if (results.length >= 2) workers.forEach((w) => w.terminate());
+					if (results.length >= 4) workers.forEach((w) => w.terminate()); // <-- now 4
 				} else if (msg.error) {
 					console.error(`# Worker ${solverName} error:`, msg.error);
 				}
@@ -286,7 +533,7 @@ async function solveWithAllStrategiesParallel(board, debug = false) {
 	await Promise.all(solvers.map(runWorker));
 
 	const fullySolved = results.filter((b) => b.isSolved());
-	return fullySolved.length ? fullySolved.slice(0, 2) : null;
+	return fullySolved.length ? fullySolved.slice(0, 4) : null; // <-- return up to 3
 }
 
 // ------------------------------
@@ -296,6 +543,7 @@ module.exports = {
 	dfsSolver,
 	bfsSolver,
 	branchBoundSolver,
+	enhancedBranchBoundSolver,
 	idaStarSolver,
 	solveWithAllStrategiesParallel,
 };
