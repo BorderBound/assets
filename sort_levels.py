@@ -1,5 +1,5 @@
-import xml.etree.ElementTree as ET
 import os
+import xml.etree.ElementTree as ET
 
 # List of input files
 input_files = [
@@ -9,24 +9,41 @@ input_files = [
     "levelsCommunity.xml",
 ]
 
-# The allowed attributes
+# Allowed attributes
 allowed_attributes = {"color", "modifier", "number", "solution"}
 
 for input_file in input_files:
     tree = ET.parse(input_file)
     root = tree.getroot()
 
-    for index, lvl in enumerate(root.findall("level"), start=1):  # start index from 1
-        # Reset number starting from 1
-        lvl.set("number", str(index))
+    # Separate demo levels (number="0") and normal levels
+    demo_levels = [lvl for lvl in root.findall("level") if lvl.get("number") == "0"]
+    normal_levels = [lvl for lvl in root.findall("level") if lvl.get("number") != "0"]
 
-        # Remove any attribute not in the allowed list
+    # Sort normal levels by length of solution (shortest first)
+    normal_levels.sort(key=lambda lvl: len(lvl.get("solution", "")))
+
+    # Clear all levels from XML
+    for lvl in root.findall("level"):
+        root.remove(lvl)
+
+    # Add demo levels first (keep number="0" as-is)
+    for lvl in demo_levels:
+        root.append(lvl)
+
+    # Add sorted normal levels and renumber starting from 1
+    for new_number, lvl in enumerate(normal_levels, start=1):
+        lvl.set("number", str(new_number))  # renumber starting at 1
+
+        # Remove any attribute not allowed
         for attr in list(lvl.attrib.keys()):
             if attr not in allowed_attributes:
                 print(
-                    f"Removing attribute '{attr}' from level {index} in {input_file}"
+                    f"Removing attribute '{attr}' from level {new_number} in {input_file}"
                 )
                 lvl.attrib.pop(attr)
+
+        root.append(lvl)
 
     # Prepare output file name
     base, ext = os.path.splitext(input_file)
