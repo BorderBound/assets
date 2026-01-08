@@ -12,6 +12,15 @@ input_files = [
 # Allowed attributes
 allowed_attributes = {"color", "modifier", "number", "solution"}
 
+# Modifiers to push to the end
+special_modifiers = {"B", "w", "x", "a", "s"}
+
+
+# Function to check if a modifier string contains any special modifier
+def has_special_modifier(modifier_str):
+    return any(char in special_modifiers for char in modifier_str)
+
+
 for input_file in input_files:
     tree = ET.parse(input_file)
     root = tree.getroot()
@@ -20,20 +29,30 @@ for input_file in input_files:
     demo_levels = [lvl for lvl in root.findall("level") if lvl.get("number") == "0"]
     normal_levels = [lvl for lvl in root.findall("level") if lvl.get("number") != "0"]
 
-    # Sort normal levels by length of solution (shortest first)
-    normal_levels.sort(key=lambda lvl: len(lvl.get("solution", "")))
+    # Split normal levels into two groups:
+    # 1. Levels without special modifiers
+    # 2. Levels with special modifiers
+    normal_regular = [lvl for lvl in normal_levels if not has_special_modifier(lvl.get("modifier", ""))]
+    normal_special = [lvl for lvl in normal_levels if has_special_modifier(lvl.get("modifier", ""))]
+
+    # Sort each group by length of solution (shortest first)
+    normal_regular.sort(key=lambda lvl: len(lvl.get("solution", "")))
+    normal_special.sort(key=lambda lvl: len(lvl.get("solution", "")))
+
+    # Combine the two groups: regular first, special later
+    sorted_levels = normal_regular + normal_special
 
     # Clear all levels from XML
     for lvl in root.findall("level"):
         root.remove(lvl)
 
-    # Add demo levels first (keep number="0" as-is)
+    # Add demo levels first (number="0" stays as-is)
     for lvl in demo_levels:
         root.append(lvl)
 
     # Add sorted normal levels and renumber starting from 1
-    for new_number, lvl in enumerate(normal_levels, start=1):
-        lvl.set("number", str(new_number))  # renumber starting at 1
+    for new_number, lvl in enumerate(sorted_levels, start=1):
+        lvl.set("number", str(new_number))  # reset number after sorting
 
         # Remove any attribute not allowed
         for attr in list(lvl.attrib.keys()):
